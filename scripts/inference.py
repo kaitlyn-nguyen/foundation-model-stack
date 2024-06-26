@@ -142,21 +142,7 @@ model.eval()
 torch.set_grad_enabled(False)
 print("loading complete on rank", local_rank)
 
-if args.compile:
-    print("compiling model")
-    # compiling can make first inference pass slow
-    model = torch.compile(model, mode=args.compile_mode)
 
-# Export and load the model
-if args.export_model:
-    print("Exporting the compiled model...")
-    example_inputs = (torch.randint(tokenizer.vocab_size(), (1, 512), device=device),)
-    exported_program = export(model, args=example_inputs)
-    save(exported_program, args.export_path)
-    model = load(args.export_path).module()
-
-    print("Expected input structure for the exported model:")
-    print(model.graph)
 
 def ids_for_prompt(prompt):
     tokens = tokenizer.tokenize(prompt)
@@ -207,6 +193,21 @@ max_len = max([len(prompt) for prompt in [prompt1, prompt2]])
 
 ids = prompt1.unsqueeze(0)
 
+if args.compile:
+    print("compiling model")
+    # compiling can make first inference pass slow
+    model = torch.compile(model, mode=args.compile_mode)
+
+# Export and load the model
+if args.export_model:
+    print("Exporting the compiled model...")
+    example_inputs = (ids,)
+    exported_program = export(model, args=example_inputs)
+    save(exported_program, args.export_path)
+    model = load(args.export_path).module()
+
+    print("Expected input structure for the exported model:")
+    print(model.graph)
 
 def print_result(result):
     if local_rank != 0:
