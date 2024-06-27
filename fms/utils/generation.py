@@ -77,7 +77,7 @@ def generate(
 
     for _ in range(max_new_tokens):
         input_ids = next_input[:, -max_seq_len:]
-        output = model(input_ids, **kwargs)
+        output = model(input_ids, attn_algorithm="math", **kwargs) #attn_algorithm=“math”
         if use_cache:
             logits, past_key_value_states = output
             # TODO: this should go away when reduce-overhead issues are fixed, or
