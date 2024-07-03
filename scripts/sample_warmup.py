@@ -49,8 +49,8 @@ def compile_and_export_model():
                 exported_program = export(compiled_model, args=example_args, kwargs=example_kwargs)
                 
                 # Save the exported model
-                filename = f"compiled_model_bs{batch_size}_ps{prompt_size}_mnt{max_new_tokens}.pt"
-                torch.save(exported_program, filename)
-                print(f"Exported compiled model saved as {filename}")
+                export_path = f"compiled_model_bs{batch_size}_ps{prompt_size}_mnt{max_new_tokens}.pt2"
+                torch.save(exported_program, export_path)
+                print(f"Exported compiled model saved as {export_path}")
 
 compile_and_export_model()
