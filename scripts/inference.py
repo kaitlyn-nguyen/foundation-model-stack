@@ -90,7 +90,7 @@ parser.add_argument(
 parser.add_argument(
     "--export_path",
     type=str,
-    default="optimized_model.pt2",
+    default="exported_model.pt2",
     help="Path to save the exported model",
 )
 
@@ -206,8 +206,9 @@ if args.export_model:
     save(exported_program, args.export_path)
     model = load(args.export_path).module()
 
-    print("Expected input structure for the exported model:")
-    print(model.graph)
+    print("Exported program:", model.state_dict)
+    
+    #TODO: Add code to handle serialization with and without state_dict 
 
 def print_result(result):
     if local_rank != 0:
