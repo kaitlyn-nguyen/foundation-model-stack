@@ -1,30 +1,38 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.export import export, save
 
-# Dummy model using scaled dot product flash attention
+class DummyQKV(nn.Module):
+    def __init__(self, embed_dim, num_heads):
+        super(DummyQKV, self).__init__()
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.qkv_proj = nn.Linear(embed_dim, 3 * embed_dim)
+
+    def forward(self, x):
+        batch_size, seq_length, embed_dim = x.size()
+        qkv = self.qkv_proj(x).view(batch_size, seq_length, self.num_heads, 3 * embed_dim // self.num_heads)
+        q, k, v = qkv.chunk(3, dim=-1)
+        return q, k, v
+
 class DummyModel(nn.Module):
     def __init__(self, embed_dim, num_heads):
         super(DummyModel, self).__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
-        self.qkv_proj = nn.Linear(embed_dim, 3 * embed_dim)
+        self.qkv = DummyQKV(embed_dim, num_heads)
         self.out_proj = nn.Linear(embed_dim, embed_dim)
 
     def forward(self, x):
         batch_size, seq_length, embed_dim = x.size()
-        qkv = self.qkv_proj(x).reshape(batch_size, seq_length, self.num_heads, 3 * embed_dim // self.num_heads)
-        q, k, v = qkv.chunk(3, dim=-1)
+        q, k, v = self.qkv(x)
 
         # Transpose for scaled dot product attention
         q = q.transpose(1, 2)
         k = k.transpose(1, 2)
         v = v.transpose(1, 2)
 
-        # Apply scaled dot product attention
-        scale = (self.embed_dim // self.num_heads) ** - 0.5
-        attn_output = F.scaled_dot_product_attention(q, k, v, scale=scale, dropout_p=0.1)
+        attn_output = torch.ops.aten._scaled_dot_product_flash_attention.default(q, k, v, 0.0, True)
 
         # Transpose back and reshape
         attn_output = attn_output.transpose(1, 2).contiguous().view(batch_size, seq_length, embed_dim)
@@ -35,7 +43,6 @@ embed_dim = 64
 num_heads = 8
 dummy_model = DummyModel(embed_dim, num_heads)
 
-# Dummy input
 input_tensor = torch.randn(32, 10, embed_dim)  # Batch size: 32, Sequence length: 10, Embedding size: 64
 
 # Try export and save the model
