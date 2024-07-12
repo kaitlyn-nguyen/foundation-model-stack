@@ -3,14 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.export import export, save
 
-class RotaryEmbedding(nn.Module):
-    def __init__(self, dim):
-        super(RotaryEmbedding, self).__init__()
-        self.dim = dim
-
-    def forward(self, q, k):
-        return q, k
-
 class SimpleAttention(nn.Module):
     def __init__(self, emb_dim, nheads, dropout=0.1):
         super(SimpleAttention, self).__init__()
@@ -18,7 +10,6 @@ class SimpleAttention(nn.Module):
         self.nheads = nheads
         self.qkv_proj = nn.Linear(emb_dim, 3 * emb_dim)
         self.out_proj = nn.Linear(emb_dim, emb_dim)
-        self.rotary_emb = RotaryEmbedding(emb_dim // nheads)
         self.dropout = nn.Dropout(dropout)
         self.norm = nn.LayerNorm(emb_dim)
 
@@ -27,9 +18,7 @@ class SimpleAttention(nn.Module):
         qkv = self.qkv_proj(x)
         qkv = qkv.view(batch_size, seq_length, self.nheads, 3 * self.emb_dim // self.nheads)
         q, k, v = torch.split(qkv, self.emb_dim // self.nheads, dim=-1)
-        q, k = self.rotary_emb(q, k)
 
-        # Correct causal mask shape
         causal_mask = torch.tril(torch.ones(seq_length, seq_length, device=x.device)).unsqueeze(0).unsqueeze(0)
         causal_mask = causal_mask.expand(batch_size, self.nheads, seq_length, seq_length).to(torch.bool)
 

@@ -269,7 +269,7 @@ class MultiHeadAttention(nn.Module):
         mask: Optional[Tensor] = None,
         position_ids=None,
         attn_algorithm=None,
-        past_key_value_state: Optional[Tuple[Tensor, Tensor]] = None,
+        past_key_value_state: Optional[Tuple[Tensor, Tensor]] = None, 
         use_cache=False,
         is_self=True,
         is_causal_mask=False,
@@ -334,14 +334,14 @@ class MultiHeadAttention(nn.Module):
             torch.backends.cuda.enable_mem_efficient_sdp(use_mem_efficient)
             torch.backends.cuda.enable_math_sdp(use_math)
 
-        # Add print statements before the SDPA call
-        print("SDPA Parameters:")
-        print(f"queries: {queries}")
-        print(f"keys_e: {keys_e}")
-        print(f"values_e: {values_e}")
-        print(f"attn_mask: {attn_mask}")
-        print(f"dropout_p: {self.p_dropout if self.training else 0.0}")
-        print(f"is_causal: {is_causal_mask}")
+        # Add print statements before the SDPA call, just print out the shape
+        # print("SDPA Parameters:")
+        # print(f"queries: {queries}")
+        # print(f"keys_e: {keys_e}")
+        # print(f"values_e: {values_e}")
+        # print(f"attn_mask: {attn_mask}")
+        # print(f"dropout_p: {self.p_dropout if self.training else 0.0}")
+        # print(f"is_causal: {is_causal_mask}")
 
         attn = F.scaled_dot_product_attention(
             queries,
