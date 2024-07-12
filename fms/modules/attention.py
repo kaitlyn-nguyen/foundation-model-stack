@@ -274,60 +274,31 @@ class MultiHeadAttention(nn.Module):
         is_self=True,
         is_causal_mask=False,
     ):
-        """
-        past_key_value_state: tuple
-            the cache to be used in attention of the form (<self/cross>_key, <self/cross>_value)
-        position_ids: Optional[torch.LongTensor]
-            The position of each of the tokens encoded in q and k. Used for RoPE embeddings
-        use_cache: bool
-            if True, the kv states for self/cross attention will be saved, otherwise they will not be saved
-        is_self: bool
-            if True, this will perform self attention, otherwise this will perform cross attention. Note: This will
-            only be used in the case that use_cache=True. This may be removed in future
+        print("Entered MultiHeadAttention forward")
+        print(f"q.shape: {q.shape}, k.shape: {k.shape if k is not None else 'None'}, v.shape: {v.shape if v is not None else 'None'}")
 
-        Returns
-        -------
-        tensor or tuple
-            If use_cache=False, only the hidden state will be returned as a tensor. If use_cache=True, a tuple will be
-            returned in the form (hidden_state, cache) where hidden_state is a tensor and cache is of the form specified
-            in past_key_value_state
-        """
-        # q, k, v: batch_size x seq_len x emb_dim
-        # mask: batch_size x seq_len x seq_len
         batch_size, q_len, _ = q.size()
 
-        # if this is self attention, we always recompute
-        # cross attention only gets computed when a cache does not exist
-        # if we dont have the cache yet, we need to compute
-        # d x (h x ds)
-        # b x kvlen x d
-        # b x kvlen x h x ds
-        # b x h x kvlen x ds
-        # todo: Cross attention (This always is true for now)
         if is_self or past_key_value_state is None:
+            print("Computing q_out, k_out, v_out")
             q_out, k_out, v_out = self.in_proj(q, k, v)
 
-            # note: transposes will be moved in a later PR to fix dis-contiguous tensor issues
             queries = q_out.view(batch_size, q_len, self.nheads, self.emb_kq_per_head)
             keys = k_out.view(batch_size, q_len, self.kvheads, self.emb_kq_per_head)
             values = v_out.view(batch_size, q_len, self.kvheads, self.emb_v_per_head)
 
-            # You want to apply rotary embeddings pre-cache
             if self.position_encoder is not None:
+                print("Applying position encoder")
                 queries, keys = self.position_encoder.adjusted_qk(
                     queries, keys, position_ids, past_key_value_state, use_cache
                 )
 
-        queries = queries.transpose(2, 1)  # / (self.emb_kq_per_head**(1/4))
-        keys = keys.transpose(2, 1)  # / (self.emb_kq_per_head**(1/4))
-        values = values.transpose(2, 1)  # compatible with QK.T
+        queries = queries.transpose(2, 1)
+        keys = keys.transpose(2, 1)
+        values = values.transpose(2, 1)
 
-        # if you want to use caching and past_key_value_state is not None meaning you have values in your cache
-        if (
-            use_cache
-            and past_key_value_state is not None
-            and past_key_value_state[0].numel() > 0
-        ):
+        if use_cache and past_key_value_state is not None and past_key_value_state[0].numel() > 0:
+            print("Using cache")
             if is_self:
                 keys = torch.cat((past_key_value_state[0], keys), dim=2)
                 values = torch.cat((past_key_value_state[1], values), dim=2)
@@ -335,34 +306,26 @@ class MultiHeadAttention(nn.Module):
                 keys = past_key_value_state[0]
                 values = past_key_value_state[1]
 
-        # Merge rel pos bias and mask into single float mask
         if mask is not None:
-            # Our expected mask format is bs x q_len x k_len, so to make it broadcastable
-            # we need to create the nheads dimension
-            while len(mask.size()) != 4:  # expects bs (x nheads) x q_len x kv_len
+            while len(mask.size()) != 4:
                 mask = mask.unsqueeze(1)
 
         if self.position_encoder is not None:
-            attn_mask: Optional[Tensor] = self.position_encoder.adjusted_mask(
+            attn_mask = self.position_encoder.adjusted_mask(
                 mask, queries, keys, past_key_value_state, use_cache
             )
         else:
             attn_mask = mask
 
-        # Expand kv so black-box attn will work
         expansion = self.nheads // self.kvheads
-        # k/v: b h l d
         if expansion != 1:
             keys_e = keys.unsqueeze(2).expand(-1, -1, expansion, -1, -1).flatten(1, 2)
-            values_e = (
-                values.unsqueeze(2).expand(-1, -1, expansion, -1, -1).flatten(1, 2)
-            )
+            values_e = values.unsqueeze(2).expand(-1, -1, expansion, -1, -1).flatten(1, 2)
         else:
             keys_e = keys
             values_e = values
 
         if attn_algorithm:
-            # Pick which fused attn kernels will run.
             use_flash = attn_algorithm == "flash"
             use_mem_efficient = attn_algorithm == "mem"
             use_math = attn_algorithm == "math"
@@ -371,7 +334,7 @@ class MultiHeadAttention(nn.Module):
             torch.backends.cuda.enable_mem_efficient_sdp(use_mem_efficient)
             torch.backends.cuda.enable_math_sdp(use_math)
 
-          # Add print statements before the SDPA call
+        # Add print statements before the SDPA call
         print("SDPA Parameters:")
         print(f"queries: {queries}")
         print(f"keys_e: {keys_e}")
