@@ -184,39 +184,7 @@ class FusedQKV(QKV):
 
 
 class MultiHeadAttention(nn.Module):
-    """
-    Performs multi-headed self- or cross-attention, with optional attention masking.
-    ...
-    Args
-    ----
-    emb_dim : int
-        Latent dimensionality of input and output tensors.
-    emb_kq : int
-        Latent dimensionality of each head in key and query projections (attention dimension).
-    emb_v : int
-        Latent dimensionality of each head in value projection (mixing dimension).
-    nheads : int
-        Number of attention heads.
-    p_dropout : float|None
-        Dropout probability. Must be in range [0,1]. If 0 or None, dropout will not be used.
-    use_bias : bool
-        Include bias terms in fully-connected sublayers?
-    fused: bool
-        if True, qkv weights will be fused, otherwise qkv weights will be unfused
-    """
-
-    def __init__(
-        self,
-        emb_dim,
-        emb_kq,
-        emb_v,
-        nheads,
-        kvheads,
-        p_dropout=None,
-        use_bias=False,
-        position_encoder: Optional[PositionEncoder] = None,
-        fused: bool = True,
-    ):
+    def __init__(self, emb_dim, emb_kq, emb_v, nheads, kvheads, p_dropout=None, use_bias=False, position_encoder: Optional[PositionEncoder] = None, fused: bool = True):
         super(MultiHeadAttention, self).__init__()
         self.nheads = nheads
         self.kvheads = kvheads
@@ -242,7 +210,6 @@ class MultiHeadAttention(nn.Module):
         if self.p_dropout:
             self.attn_dropout = nn.Dropout(self.p_dropout)
         self.position_encoder = position_encoder
-        # Avoiding graph breaks
         self.previous_flash: bool = torch.backends.cuda.flash_sdp_enabled()
         self.previous_mem_efficient: bool = (
             torch.backends.cuda.mem_efficient_sdp_enabled()
@@ -258,28 +225,17 @@ class MultiHeadAttention(nn.Module):
             elif isinstance(m, QKV):
                 m.reset_parameters()
 
-    def to_tp(self, group: ProcessGroup) -> "TPMultiHeadAttention":
-        return TPMultiHeadAttention.import_module(self, group)
-
-    def forward(
-        self,
-        q: torch.Tensor,
-        k: Optional[torch.Tensor] = None,
-        v: Optional[torch.Tensor] = None,
-        mask: Optional[Tensor] = None,
-        position_ids=None,
-        attn_algorithm=None,
-        past_key_value_state: Optional[Tuple[Tensor, Tensor]] = None, 
-        use_cache=False,
-        is_self=True,
-        is_causal_mask=False,
-    ):
+    def forward(self, q: torch.Tensor, k: Optional[torch.Tensor] = None, v: Optional[torch.Tensor] = None, mask: Optional[Tensor] = None, position_ids=None, attn_algorithm=None, past_key_value_state: Optional[Tuple[Tensor, Tensor]] = None, use_cache=False, is_self=True, is_causal_mask=False):
         print("Entered MultiHeadAttention forward")
         print(f"q.shape: {q.shape}, k.shape: {k.shape if k is not None else 'None'}, v.shape: {v.shape if v is not None else 'None'}")
-
+        
         batch_size, q_len, _ = q.size()
+        is_prefilled = past_key_value_state is None or past_key_value_state[0].numel() == 0
 
-        if is_self or past_key_value_state is None:
+
+        print(f"is_prefilled: {is_prefilled}")
+
+        if is_self or is_prefilled:
             print("Computing q_out, k_out, v_out")
             q_out, k_out, v_out = self.in_proj(q, k, v)
 
@@ -297,7 +253,7 @@ class MultiHeadAttention(nn.Module):
         keys = keys.transpose(2, 1)
         values = values.transpose(2, 1)
 
-        if use_cache and past_key_value_state is not None and past_key_value_state[0].numel() > 0:
+        if use_cache and not is_prefilled:
             print("Using cache")
             if is_self:
                 keys = torch.cat((past_key_value_state[0], keys), dim=2)
@@ -334,14 +290,7 @@ class MultiHeadAttention(nn.Module):
             torch.backends.cuda.enable_mem_efficient_sdp(use_mem_efficient)
             torch.backends.cuda.enable_math_sdp(use_math)
 
-        # Add print statements before the SDPA call, just print out the shape
-        # print("SDPA Parameters:")
-        # print(f"queries: {queries}")
-        # print(f"keys_e: {keys_e}")
-        # print(f"values_e: {values_e}")
-        # print(f"attn_mask: {attn_mask}")
-        # print(f"dropout_p: {self.p_dropout if self.training else 0.0}")
-        # print(f"is_causal: {is_causal_mask}")
+        print(f"SDPA call params - queries: {queries.shape}, keys_e: {keys_e.shape}, values_e: {values_e.shape}, attn_mask: {attn_mask.shape if attn_mask is not None else 'None'}")
 
         attn = F.scaled_dot_product_attention(
             queries,
@@ -357,10 +306,6 @@ class MultiHeadAttention(nn.Module):
             torch.backends.cuda.enable_mem_efficient_sdp(self.previous_mem_efficient)
             torch.backends.cuda.enable_math_sdp(self.previous_math)
 
-        # attn: bs x seq_len x nheads*emb_v_per_head
-        # attn: b x h x qlen x ds
-        # attn after permute: b x qlen x h x ds
-        # b x qlen x (d)
         attn = (
             attn.transpose(2, 1)
             .contiguous()
@@ -368,11 +313,11 @@ class MultiHeadAttention(nn.Module):
         )
         out = self.dense(attn)
 
-        # if use_cache=True, we return the hidden_state as well as the kv cache
         if use_cache:
             return out, (keys, values)
         else:
             return out
+
 
 
 class TPMultiHeadAttention(MultiHeadAttention, TPModule):
