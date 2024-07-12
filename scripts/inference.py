@@ -2,6 +2,8 @@ import argparse
 import itertools
 import os
 import random
+import sys
+import logging
 
 import numpy as np
 import torch
@@ -13,6 +15,9 @@ from fms.models import get_model
 from fms.utils import generation, tokenizers
 from fms.utils.generation import generate
 
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # This example script validates the LLaMA implementation by running inference on a couple of prompts.
 #
@@ -119,7 +124,7 @@ if args.distributed:
     # Fix until PT 2.3
     torch._C._distributed_c10d._register_process_group("default", dist.group.WORLD)
 
-print("loading model.......")
+logger.info("Loading model...")
 if args.distributed:
     distr_param = "tp"
 else:
@@ -140,9 +145,7 @@ model = get_model(
 tokenizer = tokenizers.get_tokenizer(args.tokenizer)
 model.eval()
 torch.set_grad_enabled(False)
-print("loading complete on rank", local_rank)
-
-
+logger.info(f"Model loading complete on rank {local_rank}")
 
 def ids_for_prompt(prompt):
     tokens = tokenizer.tokenize(prompt)
@@ -150,7 +153,6 @@ def ids_for_prompt(prompt):
     ids = tokenizer.convert_tokens_to_ids(tokens)
     ids = torch.tensor(ids, dtype=torch.long, device=device)
     return ids
-
 
 def pad_prompt(prompt, pad_len, pad_token="<unk>"):
     to_pad = pad_len - len(prompt)
@@ -161,17 +163,13 @@ def pad_prompt(prompt, pad_len, pad_token="<unk>"):
     pad_ids = [pad_id] * to_pad
     return torch.cat((torch.tensor(pad_ids, device=device), prompt))
 
-
 if args.context_file is not None:
-    # during testing, the context_file used was a copy/paste of the text of:
-    # https://arxiv.org/pdf/2306.15595.pdf
     with open(args.context_file) as file:
         long_prompt = file.read()
         prompt1 = (
             long_prompt
             + "\nPlease give me a brief summary of this research paper in a few bullet points."
         )
-        # prompt1 = long_prompt + "\nDescribe work that was done concurrently with the research in this paper."
         prompt2 = long_prompt + "\nPlease write me the abstract for this paper."
 else:
     template = "Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{}\n\n### Response:"
@@ -185,53 +183,34 @@ prompt1 = ids_for_prompt(prompt1)
 prompt2 = ids_for_prompt(prompt2)
 
 max_len = max([len(prompt) for prompt in [prompt1, prompt2]])
-# prompt1 = pad_prompt(prompt1, max_len)
-# LLaMA 7B did better on the spanish prompt vs 13B.
-# TODO: add a better english prompt to demonstrate padding/batching.
-# prompt2 = pad_prompt(prompt2, max_len)
-# ids = torch.stack((prompt2, prompt1), dim=0)
 
 ids = prompt1.unsqueeze(0)
 
 if args.compile:
-    print("compiling model")
-    # compiling can make first inference pass slow
+    logger.info("Compiling model...")
     model = torch.compile(model, mode=args.compile_mode)
 
-# Export and load the model
 if args.export_model:
-    print("Exporting the compiled model...")
+    logger.info("Exporting the compiled model...")
     example_inputs = (ids,)
     exported_program = export(model, args=example_inputs)
     save(exported_program, args.export_path)
     model = load(args.export_path).module()
-
-    print("Exported program:", model.state_dict)
-    
-    #TODO: Add code to handle serialization with and without state_dict 
+    logger.info("Exported program saved")
 
 def print_result(result):
     if local_rank != 0:
         return
-    # stop at EOS token if present
     result = generation.truncate_after_eos(result, tokenizer.eos_token_id)
-    # print(result)
-    # print(tokenizer.convert_ids_to_tokens(result))
-    print(tokenizer.convert_tokens_to_string(tokenizer.convert_ids_to_tokens(result)))
-    print()
-
+    logger.info(tokenizer.convert_tokens_to_string(tokenizer.convert_ids_to_tokens(result)))
 
 def infer(use_cache, do_sample):
-    # With greedy generation (do_sample=False) we _should_ always get the same results.
-    # There is currently a bug in start_pos for batched rotary embeddings that can lead
-    # varying results for the same prompt.
     if local_rank == 0:
-        print("use_cache", use_cache, ";; do_sample", do_sample)
-        print("==================")
+        logger.info(f"use_cache {use_cache} ;; do_sample {do_sample}")
+        logger.info("==================")
     if model.config.ntk_scaling:
         max_seq_len = max(max_len, model.config.max_expected_seq_len)
     else:
-        # without ntk scaling, extending the seq length too far gives bogus results.
         max_seq_len = model.config.max_expected_seq_len
 
     result = generate(
@@ -245,11 +224,8 @@ def infer(use_cache, do_sample):
     for i in range(result.shape[0]):
         print_result(result[i])
 
-
-print("generating output", local_rank)
+logger.info(f"Generating output on rank {local_rank}")
 do_sample = [False]
-use_cache = [
-    args.no_use_cache
-]  # True/False are identical with greedy iff `torch.use_deterministic_algorithms(True)`
+use_cache = [args.no_use_cache]
 for sample, cache in itertools.product(do_sample, use_cache):
     infer(cache, sample)
