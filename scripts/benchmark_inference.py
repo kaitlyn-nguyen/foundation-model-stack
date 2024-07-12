@@ -171,13 +171,14 @@ if world_size > 1:
     # Fix until PT 2.3
     torch._C._distributed_c10d._register_process_group("default", dist.group.WORLD)
 
-print("loading model")
+print("loading model...")
 model = models.get_model(args.architecture, args.variant, device_type=args.device_type)
 tokenizer = tokenizers.get_tokenizer(args.tokenizer)
 
 model.eval()
 torch.set_grad_enabled(False)
 print(f"loading complete on rank {local_rank}")
+
 
 SEQ_LEN = args.seq_len
 BATCH_SIZE = args.batch_size
