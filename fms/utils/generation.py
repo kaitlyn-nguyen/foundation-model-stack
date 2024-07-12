@@ -3,10 +3,7 @@ from typing import Any, Callable, List, MutableMapping, Optional, Union
 import torch
 import torch.nn.functional as F
 
-
 def _make_cache_contiguous(past_key_value_states):
-    # kv updates are required for torch.compile with
-    # mode='reduce-overhead'
     n_kv_s: List[List[torch.Tensor]] = []
     for layer_idx in range(len(past_key_value_states)):
         n_kv_s.append([])
@@ -16,9 +13,7 @@ def _make_cache_contiguous(past_key_value_states):
                 .clone(memory_format=torch.contiguous_format)
                 .detach()
             )
-            # torch._dynamo.mark_dynamic(n_kv_s[layer_idx][tensor_idx], 2)
     return n_kv_s
-
 
 def generate(
     model: Union[Callable, torch.nn.Module],
@@ -33,27 +28,6 @@ def generate(
     contiguous_cache: bool = False,
     eos_token_id: Optional[int] = None,
 ):
-    """
-    A trivial generate function that can be used for validation/testing in
-    cases where HF is not available.
-    We could add implementations for other types of generation, but this is
-    enough for making sure a model is working.
-    Does not implement batching nor beam search, but those could be added.
-
-    Args:
-        model: A function or nn.Module that takes a batch of input_ids and
-            returns logits
-        prefix: A tensor of token IDs.
-        max_seq_len: the sequence length of the model
-        max_new_tokens: max tokens to generate
-        temperature: temperature of softmax when sampling
-        top_k: only search among top k tokens
-        do_sample: multinomial sampling. False for greedy.
-        num_beams: TODO: support beam search
-        use_cache: requires that the model accept use_cache and
-            past_key_value_states args in forward method.
-    """
-    print("enter generate func")
     batched = False
     if num_beams != 1:
         raise NotImplementedError("generate() does yet not support beam search")
@@ -76,23 +50,12 @@ def generate(
     kwargs["past_key_value_states"] = None
     kwargs["use_cache"] = use_cache
 
-    for step in range(max_new_tokens):
+    for iteration in range(max_new_tokens):
         input_ids = next_input[:, -max_seq_len:]
-        output = model(input_ids, attn_algorithm="math", **kwargs) #attn_algorithm=“math”
-        if step < 2:  # Trace the first two iterations
-            print(f"Step {step + 1}")
-            print(f"input_ids: {input_ids}")
-            if use_cache:
-                logits, past_key_value_states = output
-                print(f"past_key_value_states: {past_key_value_states}")
-            else:
-                logits = output
-            print(f"logits: {logits}")
-        
+        print(f"Iteration: {iteration}, Input IDs: {input_ids}", flush=True)
+        output = model(input_ids, attn_algorithm="math", **kwargs)
         if use_cache:
             logits, past_key_value_states = output
-            # TODO: this should go away when reduce-overhead issues are fixed, or
-            # maybe could be moved into model code to be more portable.
             if contiguous_cache:
                 kwargs["past_key_value_states"] = _make_cache_contiguous(
                     past_key_value_states
@@ -104,7 +67,6 @@ def generate(
         logits = logits[:, -1, :]
 
         if do_sample:
-            # get logits from last value in sequence nad scale
             logits = logits / temperature
             if top_k:
                 v, _ = torch.topk(logits, top_k)
@@ -117,7 +79,6 @@ def generate(
 
         result = torch.cat((result, next_val), dim=-1)
 
-        # avoid continuing to generate if all have reached EOS
         if eos_token_id is not None:
             eos_found = torch.logical_or(eos_found, next_val == eos_token_id)
             if torch.sum(eos_found) == input_ids.shape[0]:
@@ -128,6 +89,13 @@ def generate(
         else:
             next_input = result
 
+        if iteration < 2:  # Print params for first two iterations
+            print(f"Iteration {iteration} Params:", flush=True)
+            print(f"next_val: {next_val}", flush=True)
+            print(f"result: {result}", flush=True)
+            if use_cache:
+                print(f"past_key_value_states: {past_key_value_states}", flush=True)
+
     if not batched:
         result = result[0]
     return result
@@ -135,11 +103,6 @@ def generate(
 def truncate_after_eos(
     result: torch.Tensor, eos_token_id: Union[int, "Any | None"]
 ) -> torch.Tensor:
-    """
-    Helper function to return a truncated sequence of token IDs stopping at
-    (and including) the 'end of sentence' token.
-    Currently only handles unbatched sequences.
-    """
     if eos_token_id is None:
         return result
     eos_idx = torch.where(result == eos_token_id)
