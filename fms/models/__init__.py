@@ -236,6 +236,7 @@ def get_model(
                 See `serialization.list_sources(architecture)`
     group: ProcessGroup The PG to use for any model distribution
     """
+    print("Getting FMS model")
     rank, world_size = distributed.rank_and_world(group)
     local_rank = distributed.local_rank()
 

@@ -25,6 +25,8 @@ def get_model(model_name_or_path: Union[str, os.PathLike]) -> HFAdaptedLLaMAForC
     from fms.models.hf.utils import register_fms_models
     from fms.models.llama import convert_hf_llama
 
+    print("Getting HF model")
+
     register_fms_models()
     hf_model = LlamaForCausalLM.from_pretrained(model_name_or_path)
     fms_model = convert_hf_llama(hf_model).half()
