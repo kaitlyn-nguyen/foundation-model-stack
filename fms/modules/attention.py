@@ -371,6 +371,15 @@ class MultiHeadAttention(nn.Module):
             torch.backends.cuda.enable_mem_efficient_sdp(use_mem_efficient)
             torch.backends.cuda.enable_math_sdp(use_math)
 
+          # Add print statements before the SDPA call
+        print("SDPA Parameters:")
+        print(f"queries: {queries}")
+        print(f"keys_e: {keys_e}")
+        print(f"values_e: {values_e}")
+        print(f"attn_mask: {attn_mask}")
+        print(f"dropout_p: {self.p_dropout if self.training else 0.0}")
+        print(f"is_causal: {is_causal_mask}")
+
         attn = F.scaled_dot_product_attention(
             queries,
             keys_e,
