@@ -4,6 +4,14 @@ import os
 import random
 import sys
 import logging
+import sys
+
+# Redirect stdout and stderr to a file
+log_file = open("output.log", "w")
+sys.stdout = log_file
+sys.stderr = log_file
+
+
 
 import numpy as np
 import torch
