@@ -177,7 +177,7 @@ else:
     template = "Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{}\n\n### Response:"
 
     prompt1 = template.format(
-        "Provide a list of instructions for preparing chicken soup."
+        "Provide a list of instructions for preparing egg tart."
     )
     prompt2 = template.format("Explain some popular greetings in Spanish.")
 
