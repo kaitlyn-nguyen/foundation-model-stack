@@ -75,9 +75,19 @@ def generate(
     kwargs["past_key_value_states"] = None
     kwargs["use_cache"] = use_cache
 
-    for _ in range(max_new_tokens):
+    for step in range(max_new_tokens):
         input_ids = next_input[:, -max_seq_len:]
         output = model(input_ids, attn_algorithm="math", **kwargs) #attn_algorithm=“math”
+        if step < 2:  # Trace the first two iterations
+            print(f"Step {step + 1}")
+            print(f"input_ids: {input_ids}")
+            if use_cache:
+                logits, past_key_value_states = output
+                print(f"past_key_value_states: {past_key_value_states}")
+            else:
+                logits = output
+            print(f"logits: {logits}")
+        
         if use_cache:
             logits, past_key_value_states = output
             # TODO: this should go away when reduce-overhead issues are fixed, or
@@ -120,7 +130,6 @@ def generate(
     if not batched:
         result = result[0]
     return result
-
 
 def truncate_after_eos(
     result: torch.Tensor, eos_token_id: Union[int, "Any | None"]
