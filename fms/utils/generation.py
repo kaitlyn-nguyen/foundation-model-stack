@@ -53,6 +53,7 @@ def generate(
         use_cache: requires that the model accept use_cache and
             past_key_value_states args in forward method.
     """
+    print("enter generate func")
     batched = False
     if num_beams != 1:
         raise NotImplementedError("generate() does yet not support beam search")
