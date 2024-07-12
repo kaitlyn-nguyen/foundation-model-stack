@@ -119,7 +119,7 @@ if args.distributed:
     # Fix until PT 2.3
     torch._C._distributed_c10d._register_process_group("default", dist.group.WORLD)
 
-print("loading model")
+print("loading model.......")
 if args.distributed:
     distr_param = "tp"
 else:
