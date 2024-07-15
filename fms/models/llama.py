@@ -358,7 +358,7 @@ class LLaMA(nn.Module):
         only_last_token=False,
         attn_algorithm=None,
     ):
-        print("Entered LLaMABlock forward")
+        # print("Entered LLaMABlock forward")
         output, cache = self._helper(
             x, mask, position_ids, past_key_value_states, use_cache, attn_algorithm
         )
