@@ -394,9 +394,9 @@ class MultiHeadAttention(nn.Module):
             torch.backends.cuda.enable_math_sdp(use_math)
 
        # Hardcoded values
-        queries = torch.randn((1, 32, 48, 128))
-        keys_e = torch.randn((1, 32, 48, 128))
-        values_e = torch.randn((1, 32, 48, 128))
+        queries = torch.randn((1, 32, 48, 128)).cuda()
+        keys_e = torch.randn((1, 32, 48, 128)).cuda()
+        values_e = torch.randn((1, 32, 48, 128)).cuda()
         attn_mask = None
         dropout_p = 0.0
         is_causal_mask = True
