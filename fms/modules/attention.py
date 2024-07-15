@@ -393,13 +393,21 @@ class MultiHeadAttention(nn.Module):
             torch.backends.cuda.enable_mem_efficient_sdp(use_mem_efficient)
             torch.backends.cuda.enable_math_sdp(use_math)
 
+       # Hardcoded values
+        queries = torch.randn((1, 32, 48, 128))
+        keys_e = torch.randn((1, 32, 48, 128))
+        values_e = torch.randn((1, 32, 48, 128))
+        attn_mask = None
+        dropout_p = 0.0
+        is_causal_mask = True
+
         attn = F.scaled_dot_product_attention(
             queries,
             keys_e,
             values_e,
             attn_mask=attn_mask,
             dropout_p=self.p_dropout if self.training else 0.0,
-            is_causal=is_causal_mask,
+            is_causal=True,
         )
 
         if attn_algorithm:
