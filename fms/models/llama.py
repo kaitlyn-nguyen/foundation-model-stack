@@ -129,7 +129,7 @@ class LLaMABlock(nn.Module):
         # first we do MHA and Add&Norm
         residual = x
         x = self.ln(x)
-        print("Before multihead attention")
+        # print("Before multihead attention")
         x = self.attn(
             q=x,
             mask=mask,
@@ -140,7 +140,7 @@ class LLaMABlock(nn.Module):
             is_self=True,
             is_causal_mask=is_causal_mask,
         )
-        print("After multihead")
+        # print("After multihead")
         cache = None
         if use_cache:
             x, cache = x
