@@ -88,14 +88,14 @@ def generate(
         else:
             next_input = result
 
-        # Print parameters for the first and second iterations
-        if iteration < 2:
-            print(f"Iteration {iteration + 1}")
-            print(f"input_ids: {input_ids}")
-            print(f"logits: {logits}")
-            if use_cache:
-                print(f"past_key_value_states: {kwargs['past_key_value_states']}")
-            print(f"next_val: {next_val}")
+        # # Print parameters for the first and second iterations
+        # if iteration < 2:
+        #     print(f"Iteration {iteration + 1}")
+        #     print(f"input_ids: {input_ids}")
+        #     print(f"logits: {logits}")
+        #     if use_cache:
+        #         print(f"past_key_value_states: {kwargs['past_key_value_states']}")
+        #     print(f"next_val: {next_val}")
 
     if not batched:
         result = result[0]
