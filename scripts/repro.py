@@ -7,9 +7,9 @@ class MinimalModel(torch.nn.Module):
         super(MinimalModel, self).__init__()
 
     def forward(self):
-        queries = torch.randn((1, 32, 48, 128))
-        keys_e = torch.randn((1, 32, 48, 128))
-        values_e = torch.randn((1, 32, 48, 128))
+        queries = torch.randn((1, 32, 48, 128), dtype=torch.float32)
+        keys_e = torch.randn((1, 32, 48, 128), dtype=torch.float32)
+        values_e = torch.randn((1, 32, 48, 128), dtype=torch.float32)
         attn_mask = None
         dropout_p = 0.0
         is_causal = True
@@ -26,7 +26,7 @@ class MinimalModel(torch.nn.Module):
         )
 
         # Return a dummy second value to meet expected return structure
-        dummy_value = torch.tensor(0)
+        dummy_value = torch.tensor(0, dtype=torch.float16)
         return output, dummy_value
 
 def create_reproducible_example():

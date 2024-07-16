@@ -406,13 +406,13 @@ class MultiHeadAttention(nn.Module):
     #     dropout_p = 0.0
     #     is_causal_mask = True
 
-      # Print dtypes of inputs to scaled_dot_product_attention
-        print(f"queries dtype: {queries.dtype}")
-        print(f"keys_e dtype: {keys_e.dtype}")
-        print(f"values_e dtype: {values_e.dtype}")
-        print(f"attn_mask dtype: {attn_mask.dtype if attn_mask is not None else 'None'}")
-        print(f"dropout_p: {self.p_dropout if self.training else 0.0}")
-        print(f"is_causal: {is_causal_mask}")
+    #   # Print dtypes of inputs to scaled_dot_product_attention
+    #     print(f"queries dtype: {queries.dtype}")
+    #     print(f"keys_e dtype: {keys_e.dtype}")
+    #     print(f"values_e dtype: {values_e.dtype}")
+    #     print(f"attn_mask dtype: {attn_mask.dtype if attn_mask is not None else 'None'}")
+    #     print(f"dropout_p: {self.p_dropout if self.training else 0.0}")
+    #     print(f"is_causal: {is_causal_mask}")
 
         attn = F.scaled_dot_product_attention(
             queries,

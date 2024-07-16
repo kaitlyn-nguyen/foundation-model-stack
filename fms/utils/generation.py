@@ -52,6 +52,11 @@ def generate(
 
     for iteration in range(max_new_tokens):
         input_ids = next_input[:, -max_seq_len:]
+        
+        print(f"Iteration {iteration}:")
+        print(f"input_ids dtype: {input_ids.dtype}")
+        print(f"past_key_value_states dtype: {[t.dtype for layer in kwargs['past_key_value_states'] for t in layer]}")
+
         output = model(input_ids, attn_algorithm="math", **kwargs)
         if use_cache:
             logits, past_key_value_states = output
@@ -65,6 +70,8 @@ def generate(
             logits = output
         logits = logits[:, -1, :]
 
+        print(f"logits dtype: {logits.dtype}")
+
         if do_sample:
             logits = logits / temperature
             if top_k:
@@ -75,6 +82,8 @@ def generate(
             next_val = torch.multinomial(probs, num_samples=1)
         else:
             next_val = torch.argmax(logits, dim=-1).unsqueeze(0).t()
+
+        print(f"next_val dtype: {next_val.dtype}")
 
         result = torch.cat((result, next_val), dim=-1)
 
@@ -87,15 +96,6 @@ def generate(
             next_input = next_val
         else:
             next_input = result
-
-        # # Print parameters for the first and second iterations
-        # if iteration < 2:
-        #     print(f"Iteration {iteration + 1}")
-        #     print(f"input_ids: {input_ids}")
-        #     print(f"logits: {logits}")
-        #     if use_cache:
-        #         print(f"past_key_value_states: {kwargs['past_key_value_states']}")
-        #     print(f"next_val: {next_val}")
 
     if not batched:
         result = result[0]
