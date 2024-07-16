@@ -390,6 +390,10 @@ class MultiHeadAttention(nn.Module):
             use_mem_efficient = attn_algorithm == "mem"
             use_math = attn_algorithm == "math"
 
+            print("USE FLASH", use_flash)
+            print("USE MEM", use_mem_efficient)
+            print("USE MATH", use_math)
+
             torch.backends.cuda.enable_flash_sdp(use_flash)
             torch.backends.cuda.enable_mem_efficient_sdp(use_mem_efficient)
             torch.backends.cuda.enable_math_sdp(use_math)
