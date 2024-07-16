@@ -385,6 +385,7 @@ class MultiHeadAttention(nn.Module):
 
         if attn_algorithm:
             # Pick which fused attn kernels will run.
+            print("attn_alg", attn_algorithm)
             use_flash = attn_algorithm == "flash"
             use_mem_efficient = attn_algorithm == "mem"
             use_math = attn_algorithm == "math"
