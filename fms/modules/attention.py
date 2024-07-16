@@ -385,14 +385,14 @@ class MultiHeadAttention(nn.Module):
 
         if attn_algorithm:
             # Pick which fused attn kernels will run.
-            print("attn_alg", attn_algorithm)
+            # print("attn_alg", attn_algorithm)
             use_flash = attn_algorithm == "flash"
             use_mem_efficient = attn_algorithm == "mem"
             use_math = attn_algorithm == "math"
 
-            print("USE FLASH", use_flash)
-            print("USE MEM", use_mem_efficient)
-            print("USE MATH", use_math)
+            # print("USE FLASH", use_flash)
+            # print("USE MEM", use_mem_efficient)
+            # print("USE MATH", use_math)
 
             torch.backends.cuda.enable_flash_sdp(use_flash)
             torch.backends.cuda.enable_mem_efficient_sdp(use_mem_efficient)
