@@ -55,7 +55,10 @@ def generate(
         
         print(f"Iteration {iteration}:")
         print(f"input_ids dtype: {input_ids.dtype}")
-        print(f"past_key_value_states dtype: {[t.dtype for layer in kwargs['past_key_value_states'] for t in layer]}")
+        if kwargs["past_key_value_states"] is None:
+            print("past_key_value_states dtype: None")
+        else:
+            print(f"past_key_value_states dtype: {[t.dtype for layer in kwargs['past_key_value_states'] for t in layer]}")
 
         output = model(input_ids, attn_algorithm="math", **kwargs)
         if use_cache:
