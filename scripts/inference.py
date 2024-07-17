@@ -198,7 +198,9 @@ if args.export_model:
     logger.info("Exporting the compiled model...")
     example_inputs = (ids,)
     exported_program = export(model, args=example_inputs)
+    
     save(exported_program, args.export_path)
+    del model 
     model = load(args.export_path).module()
     logger.info("Exported program saved")
 
