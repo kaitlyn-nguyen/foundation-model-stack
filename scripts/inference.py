@@ -198,7 +198,7 @@ if args.export_model:
     logger.info("Exporting the compiled model...")
     example_inputs = (ids,)
     exported_program = export(model, args=example_inputs)
-    
+
     save(exported_program, args.export_path)
     del model 
     model = load(args.export_path).module()
@@ -214,10 +214,10 @@ def infer(use_cache, do_sample):
     if local_rank == 0:
         logger.info(f"use_cache {use_cache} ;; do_sample {do_sample}")
         logger.info("==================")
-    if model.config.ntk_scaling:
-        max_seq_len = max(max_len, model.config.max_expected_seq_len)
-    else:
-        max_seq_len = model.config.max_expected_seq_len
+    # if model.config.ntk_scaling:
+    #     max_seq_len = max(max_len, model.config.max_expected_seq_len)
+    # else:
+    #     max_seq_len = model.config.max_expected_seq_len
 
     result = generate(
         model,
@@ -225,7 +225,7 @@ def infer(use_cache, do_sample):
         max_new_tokens=200,
         use_cache=use_cache,
         do_sample=do_sample,
-        max_seq_len=max_seq_len,
+        max_seq_len=2000,
     )
     for i in range(result.shape[0]):
         print_result(result[i])
