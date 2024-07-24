@@ -217,7 +217,6 @@ if args.export_model:
         logger.error(f"Failed to export the model: {e}")
         raise
 
-
 def print_result(result):
     if local_rank != 0:
         return
