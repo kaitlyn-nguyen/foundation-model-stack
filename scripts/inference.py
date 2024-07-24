@@ -196,13 +196,18 @@ if args.compile:
 
 if args.export_model:
     logger.info("Exporting the compiled model...")
-    example_inputs = (ids,)
-    exported_program = export(model, args=example_inputs)
+    
+    example_inputs = (ids, {"attn_algorithm": "math", "past_key_value_states": None, "use_cache": False})
 
-    save(exported_program, args.export_path)
-    del model 
-    model = load(args.export_path).module()
-    logger.info("Exported program saved")
+    try:
+        exported_program = export(model, example_inputs)
+        save(exported_program, args.export_path)
+        del model 
+        model = load(args.export_path).module()
+        logger.info("Exported program saved")
+    except Exception as e:
+        logger.error(f"Failed to export the model: {e}")
+        raise
 
 def print_result(result):
     if local_rank != 0:
