@@ -6,9 +6,6 @@ import sys
 import logging
 import sys
 
-
-
-
 import numpy as np
 import torch
 import torch._inductor.config
@@ -22,13 +19,6 @@ from fms.utils.generation import generate
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# This example script validates the LLaMA implementation by running inference on a couple of prompts.
-#
-# Example usage with single-GPU 7B model on slurm, with torch.compile and determinstic behavior:
-# CUBLAS_WORKSPACE_CONFIG=:4096:8 srun -N 1 --gres=gpu:1 python scripts/inference.py --model_path=~/models/7B-F/ --tokenizer=~/models/tokenizer.model --compile --deterministic
-# Example usage of 13B model on 2 GPUs with Tensor Parallel:
-# srun -N 1 --gres=gpu:2 torchrun --nproc_per_node=2 scripts/inference.py --model_path=~/models/13B-F --tokenizer=~/models/tokenizer.model --distributed
 
 parser = argparse.ArgumentParser(
     description="Script to run inference on a causal model"
@@ -151,6 +141,17 @@ model.eval()
 torch.set_grad_enabled(False)
 logger.info(f"Model loading complete on rank {local_rank}")
 
+past_key_value_states = [(torch.zeros((1, 4, 194, 48), dtype=torch.float16, device=device), 
+                          torch.zeros((1, 4, 194, 48), dtype=torch.float16, device=device)) for _ in range(5)]
+
+class ForwardModule(torch.nn.Module):
+    def __init__(self, model):
+        super(ForwardModule, self).__init__()
+        self.model = model
+
+    def forward(self, input_ids, past_key_value_states=None):
+        return self.model.forward(input_ids, attn_algorithm="math", past_key_value_states=past_key_value_states, use_cache=True)
+
 def ids_for_prompt(prompt):
     tokens = tokenizer.tokenize(prompt)
     tokens = ["<s>"] + tokens
@@ -194,28 +195,77 @@ if args.compile:
     logger.info("Compiling model...")
     model = torch.compile(model, mode=args.compile_mode)
 
-if args.export_model:
-    logger.info("Exporting the compiled model...")
 
-    try:
-        # Example inputs including additional parameters
-        example_inputs = (
-            ids,
-            {
-                "attn_algorithm": "math",
-                "past_key_value_states": None,
-                "use_cache": False
-            }
-        )
+# Create forward module instance
+forward_module = ForwardModule(model)
 
-        exported_program = export(model, args=example_inputs)
-        save(exported_program, args.export_path)
-        del model 
-        model = load(args.export_path).module()
-        logger.info("Exported program saved")
-    except Exception as e:
-        logger.error(f"Failed to export the model: {e}")
-        raise
+# Measure normal forward call time
+normal_start_event = torch.cuda.Event(enable_timing=True)
+normal_end_event = torch.cuda.Event(enable_timing=True)
+
+normal_start_event.record()
+with torch.no_grad():
+    normal_outputs = model.forward(ids, attn_algorithm="math", past_key_value_states=past_key_value_states, use_cache=True)
+normal_end_event.record()
+
+torch.cuda.synchronize()
+normal_forward_time = normal_start_event.elapsed_time(normal_end_event)
+logger.info(f"Normal forward call time: {normal_forward_time} ms")
+
+# Measure compiled forward call time
+compiled_model = torch.compile(model)
+compiled_start_event = torch.cuda.Event(enable_timing=True)
+compiled_end_event = torch.cuda.Event(enable_timing=True)
+
+compiled_start_event.record()
+with torch.no_grad():
+    compiled_outputs = compiled_model.forward(ids, attn_algorithm="math", past_key_value_states=past_key_value_states, use_cache=True)
+compiled_end_event.record()
+
+torch.cuda.synchronize()
+compiled_forward_time = compiled_start_event.elapsed_time(compiled_end_event)
+logger.info(f"Compiled forward call time: {compiled_forward_time} ms")
+
+# Export the forward call
+export_start_event = torch.cuda.Event(enable_timing=True)
+export_end_event = torch.cuda.Event(enable_timing=True)
+
+export_start_event.record()
+
+#export starts here
+exported_program = export(forward_module, args=(ids, past_key_value_states))
+save(exported_program, args.export_path)
+export_end_event.record()
+
+torch.cuda.synchronize()
+export_time = export_start_event.elapsed_time(export_end_event)
+logger.info(f"Export time: {export_time} ms")
+
+# Load the exported forward call
+load_start_event = torch.cuda.Event(enable_timing=True)
+load_end_event = torch.cuda.Event(enable_timing=True)
+
+load_start_event.record()
+loaded_program = load(args.export_path).module()
+load_end_event.record()
+
+torch.cuda.synchronize()
+load_time = load_start_event.elapsed_time(load_end_event)
+logger.info(f"Load time: {load_time} ms")
+
+# Measure forward call time with the loaded model
+loaded_forward_start_event = torch.cuda.Event(enable_timing=True)
+loaded_forward_end_event = torch.cuda.Event(enable_timing=True)
+
+
+loaded_forward_start_event.record()
+with torch.no_grad():
+    loaded_forward_outputs = loaded_program.forward(ids, past_key_value_states)
+loaded_forward_end_event.record()
+
+torch.cuda.synchronize()
+loaded_forward_time = loaded_forward_start_event.elapsed_time(loaded_forward_end_event)
+logger.info(f"Forward call time with loaded model: {loaded_forward_time} ms")
 
 def print_result(result):
     if local_rank != 0:
@@ -227,10 +277,6 @@ def infer(use_cache, do_sample):
     if local_rank == 0:
         logger.info(f"use_cache {use_cache} ;; do_sample {do_sample}")
         logger.info("==================")
-    # if model.config.ntk_scaling:
-    #     max_seq_len = max(max_len, model.config.max_expected_seq_len)
-    # else:
-    #     max_seq_len = model.config.max_expected_seq_len
 
     result = generate(
         model,
