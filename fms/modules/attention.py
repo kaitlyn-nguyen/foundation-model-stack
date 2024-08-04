@@ -358,11 +358,19 @@ class MultiHeadAttention(nn.Module):
                 values = past_key_value_state[1]
 
         # Merge rel pos bias and mask into single float mask
+        # Print the original mask
         if mask is not None:
-            # Our expected mask format is bs x q_len x k_len, so to make it broadcastable
-            # we need to create the nheads dimension
-            while len(mask.size()) != 4:  # expects bs (x nheads) x q_len x kv_len
-                mask = mask.unsqueeze(1)
+            print(f"Original mask: {mask}")
+            print(f"Original mask shape: {mask.shape}")
+            
+            if isinstance(mask, torch.Tensor):
+                # Ensure mask has the correct dimensions
+                while len(mask.size()) != 4:  # expects bs (x nheads) x q_len x kv_len
+                    mask = mask.unsqueeze(1)
+                print(f"Adjusted mask: {mask}")
+                print(f"Adjusted mask shape: {mask.shape}")
+            else:
+                raise ValueError("Expected mask to be a Tensor, but got {}".format(type(mask)))
 
         if self.position_encoder is not None:
             attn_mask: Optional[Tensor] = self.position_encoder.adjusted_mask(
