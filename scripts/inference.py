@@ -196,76 +196,102 @@ if args.compile:
     model = torch.compile(model, mode=args.compile_mode)
 
 
-# Create forward module instance
+# # Create forward module instance
+# forward_module = ForwardModule(model)
+
+# # Measure normal forward call time
+# normal_start_event = torch.cuda.Event(enable_timing=True)
+# normal_end_event = torch.cuda.Event(enable_timing=True)
+
+# normal_start_event.record()
+# with torch.no_grad():
+#     normal_outputs = model.forward(ids, attn_algorithm="math", past_key_value_states=past_key_value_states, use_cache=True)
+# normal_end_event.record()
+
+# torch.cuda.synchronize()
+# normal_forward_time = normal_start_event.elapsed_time(normal_end_event)
+# logger.info(f"Normal forward call time: {normal_forward_time} ms")
+
+# # Measure compiled forward call time
+# compiled_model = torch.compile(model)
+# compiled_start_event = torch.cuda.Event(enable_timing=True)
+# compiled_end_event = torch.cuda.Event(enable_timing=True)
+
+# compiled_start_event.record()
+# with torch.no_grad():
+#     compiled_outputs = compiled_model.forward(ids, attn_algorithm="math", past_key_value_states=past_key_value_states, use_cache=True)
+# compiled_end_event.record()
+
+# torch.cuda.synchronize()
+# compiled_forward_time = compiled_start_event.elapsed_time(compiled_end_event)
+# logger.info(f"Compiled forward call time: {compiled_forward_time} ms")
+
+# # Export the forward call
+# export_start_event = torch.cuda.Event(enable_timing=True)
+# export_end_event = torch.cuda.Event(enable_timing=True)
+
+# export_start_event.record()
+
+# #export starts here
+# exported_program = export(forward_module, args=(ids, past_key_value_states))
+# save(exported_program, args.export_path)
+# export_end_event.record()
+
+# torch.cuda.synchronize()
+# export_time = export_start_event.elapsed_time(export_end_event)
+# logger.info(f"Export time: {export_time} ms")
+
+# # Load the exported forward call
+# load_start_event = torch.cuda.Event(enable_timing=True)
+# load_end_event = torch.cuda.Event(enable_timing=True)
+
+# load_start_event.record()
+# loaded_program = load(args.export_path).module()
+# load_end_event.record()
+
+# torch.cuda.synchronize()
+# load_time = load_start_event.elapsed_time(load_end_event)
+# logger.info(f"Load time: {load_time} ms")
+
+# # Measure forward call time with the loaded model
+# loaded_forward_start_event = torch.cuda.Event(enable_timing=True)
+# loaded_forward_end_event = torch.cuda.Event(enable_timing=True)
+
+
+# loaded_forward_start_event.record()
+# with torch.no_grad():
+#     loaded_forward_outputs = loaded_program.forward(ids, past_key_value_states)
+# loaded_forward_end_event.record()
+
+# torch.cuda.synchronize()
+# loaded_forward_time = loaded_forward_start_event.elapsed_time(loaded_forward_end_event)
+# logger.info(f"Forward call time with loaded model: {loaded_forward_time} ms")
+
+
 forward_module = ForwardModule(model)
-
-# Measure normal forward call time
-normal_start_event = torch.cuda.Event(enable_timing=True)
-normal_end_event = torch.cuda.Event(enable_timing=True)
-
-normal_start_event.record()
-with torch.no_grad():
-    normal_outputs = model.forward(ids, attn_algorithm="math", past_key_value_states=past_key_value_states, use_cache=True)
-normal_end_event.record()
-
-torch.cuda.synchronize()
-normal_forward_time = normal_start_event.elapsed_time(normal_end_event)
-logger.info(f"Normal forward call time: {normal_forward_time} ms")
-
-# Measure compiled forward call time
-compiled_model = torch.compile(model)
-compiled_start_event = torch.cuda.Event(enable_timing=True)
-compiled_end_event = torch.cuda.Event(enable_timing=True)
-
-compiled_start_event.record()
-with torch.no_grad():
-    compiled_outputs = compiled_model.forward(ids, attn_algorithm="math", past_key_value_states=past_key_value_states, use_cache=True)
-compiled_end_event.record()
-
-torch.cuda.synchronize()
-compiled_forward_time = compiled_start_event.elapsed_time(compiled_end_event)
-logger.info(f"Compiled forward call time: {compiled_forward_time} ms")
-
-# Export the forward call
-export_start_event = torch.cuda.Event(enable_timing=True)
-export_end_event = torch.cuda.Event(enable_timing=True)
-
-export_start_event.record()
-
-#export starts here
-exported_program = export(forward_module, args=(ids, past_key_value_states))
-save(exported_program, args.export_path)
-export_end_event.record()
-
-torch.cuda.synchronize()
-export_time = export_start_event.elapsed_time(export_end_event)
-logger.info(f"Export time: {export_time} ms")
-
-# Load the exported forward call
-load_start_event = torch.cuda.Event(enable_timing=True)
-load_end_event = torch.cuda.Event(enable_timing=True)
-
-load_start_event.record()
-loaded_program = load(args.export_path).module()
-load_end_event.record()
-
-torch.cuda.synchronize()
-load_time = load_start_event.elapsed_time(load_end_event)
-logger.info(f"Load time: {load_time} ms")
-
-# Measure forward call time with the loaded model
-loaded_forward_start_event = torch.cuda.Event(enable_timing=True)
-loaded_forward_end_event = torch.cuda.Event(enable_timing=True)
-
-
-loaded_forward_start_event.record()
-with torch.no_grad():
-    loaded_forward_outputs = loaded_program.forward(ids, past_key_value_states)
-loaded_forward_end_event.record()
-
-torch.cuda.synchronize()
-loaded_forward_time = loaded_forward_start_event.elapsed_time(loaded_forward_end_event)
-logger.info(f"Forward call time with loaded model: {loaded_forward_time} ms")
+if args.export_model:
+    logger.info("Exporting the model's forward call...")
+    try:
+        example_inputs = (ids,)
+        # Exporting the forward call using the wrapper module
+        exported_program = export(forward_module, args=example_inputs)
+        save(exported_program, args.export_path)
+        logger.info("Model's forward call exported successfully")
+        # Loading the exported forward call
+        loaded_program = load(args.export_path).module()
+        logger.info("Loaded the exported model's forward call successfully")
+        with torch.no_grad():
+            # Example input for generation
+            example_input_ids = ids
+            # Run the generation function to get initial outputs and past_key_value_states
+            generated_outputs = generate(model, example_input_ids, max_new_tokens=10, use_cache=True)
+            logits, past_key_value_states = model.forward(example_input_ids, use_cache=True)
+        # Print shapes of past_key_value_states
+        for i, layer_cache in enumerate(past_key_value_states):
+            print(f"Layer {i} key shape: {layer_cache[0].shape}, value shape: {layer_cache[1].shape}")
+    except Exception as e:
+        logger.error(f"Failed to export the model: {e}")
+        raise
 
 def print_result(result):
     if local_rank != 0:
