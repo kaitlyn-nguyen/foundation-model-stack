@@ -53,12 +53,12 @@ def generate(
     for iteration in range(max_new_tokens):
         input_ids = next_input[:, -max_seq_len:]
         
-        print(f"Iteration {iteration}:")
-        print(f"input_ids dtype: {input_ids.dtype}")
-        if kwargs["past_key_value_states"] is None:
-            print("past_key_value_states dtype: None")
-        else:
-            print(f"past_key_value_states dtype: {[t.dtype for layer in kwargs['past_key_value_states'] for t in layer]}")
+        # print(f"Iteration {iteration}:")
+        # print(f"input_ids dtype: {input_ids.dtype}")
+        # if kwargs["past_key_value_states"] is None:
+        #     print("past_key_value_states dtype: None")
+        # else:
+        #     print(f"past_key_value_states dtype: {[t.dtype for layer in kwargs['past_key_value_states'] for t in layer]}")
 
         output = model(input_ids, attn_algorithm="math", **kwargs)
         if use_cache:
@@ -73,7 +73,7 @@ def generate(
             logits = output
         logits = logits[:, -1, :]
 
-        print(f"logits dtype: {logits.dtype}")
+        # print(f"logits dtype: {logits.dtype}")
 
         if do_sample:
             logits = logits / temperature
