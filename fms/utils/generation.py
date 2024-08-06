@@ -86,7 +86,7 @@ def generate(
         else:
             next_val = torch.argmax(logits, dim=-1).unsqueeze(0).t()
 
-        print(f"next_val dtype: {next_val.dtype}")
+        # print(f"next_val dtype: {next_val.dtype}")
 
         result = torch.cat((result, next_val), dim=-1)
 

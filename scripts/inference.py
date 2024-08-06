@@ -141,8 +141,8 @@ model.eval()
 torch.set_grad_enabled(False)
 logger.info(f"Model loading complete on rank {local_rank}")
 
-past_key_value_states = [(torch.zeros((1, 4, 194, 48), dtype=torch.float16, device=device), 
-                          torch.zeros((1, 4, 194, 48), dtype=torch.float16, device=device)) for _ in range(5)]
+past_key_value_states = [(torch.zeros((1, 32, 48, 128), dtype=torch.float16, device=device), 
+                          torch.zeros((1, 32, 48, 128), dtype=torch.float16, device=device)) for _ in range(32)]
 
 class ForwardModule(torch.nn.Module):
     def __init__(self, model):
@@ -150,7 +150,7 @@ class ForwardModule(torch.nn.Module):
         self.model = model
 
     def forward(self, input_ids, past_key_value_states=None):
-        return self.model.forward(input_ids, attn_algorithm="math", past_key_value_states=past_key_value_states, use_cache=True)
+        return self.model.forward(input_ids, attn_algorithm="math", past_key_value_states=past_key_value_states, use_cache=True) 
 
 def ids_for_prompt(prompt):
     tokens = tokenizer.tokenize(prompt)
@@ -210,16 +210,27 @@ normal_end_event.record()
 
 torch.cuda.synchronize()
 normal_forward_time = normal_start_event.elapsed_time(normal_end_event)
-logger.info(f"Normal forward call time: {normal_forward_time} ms")
+logger.info(f"Eager mode forward call time: {normal_forward_time} ms")
+
+# Measure compilation time of a forward call
+compile_start_event = torch.cuda.Event(enable_timing=True)
+compile_end_event = torch.cuda.Event(enable_timing=True)
+
+compile_start_event.record()
+compiled_model = torch.compile(forward_module)
+compile_end_event.record()
+
+torch.cuda.synchronize()
+compile_time = compile_start_event.elapsed_time(compile_end_event)
+logger.info(f"Compilation time of a forward call: {compile_time} ms")
 
 # Measure compiled forward call time
-compiled_model = torch.compile(model)
 compiled_start_event = torch.cuda.Event(enable_timing=True)
 compiled_end_event = torch.cuda.Event(enable_timing=True)
 
 compiled_start_event.record()
 with torch.no_grad():
-    compiled_outputs = compiled_model.forward(ids, attn_algorithm="math", past_key_value_states=past_key_value_states, use_cache=True)
+    compiled_outputs = compiled_model.forward(ids, past_key_value_states=past_key_value_states)
 compiled_end_event.record()
 
 torch.cuda.synchronize()
@@ -239,7 +250,7 @@ export_end_event.record()
 
 torch.cuda.synchronize()
 export_time = export_start_event.elapsed_time(export_end_event)
-logger.info(f"Export time: {export_time} ms")
+logger.info(f"Export time of a forward call: {export_time} ms")
 
 # Load the exported forward call
 load_start_event = torch.cuda.Event(enable_timing=True)
@@ -253,7 +264,7 @@ torch.cuda.synchronize()
 load_time = load_start_event.elapsed_time(load_end_event)
 logger.info(f"Load time: {load_time} ms")
 
-# Measure forward call time with the loaded model
+# Measure forward call time exported and loaded mode
 loaded_forward_start_event = torch.cuda.Event(enable_timing=True)
 loaded_forward_end_event = torch.cuda.Event(enable_timing=True)
 
@@ -265,7 +276,7 @@ loaded_forward_end_event.record()
 
 torch.cuda.synchronize()
 loaded_forward_time = loaded_forward_start_event.elapsed_time(loaded_forward_end_event)
-logger.info(f"Forward call time with loaded model: {loaded_forward_time} ms")
+logger.info(f"Exported and loaded mode forward call: {loaded_forward_time} ms")
 
 def print_result(result):
     if local_rank != 0:
