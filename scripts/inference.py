@@ -217,12 +217,14 @@ compile_start_event = torch.cuda.Event(enable_timing=True)
 compile_end_event = torch.cuda.Event(enable_timing=True)
 
 compile_start_event.record()
-compiled_model = torch.compile(forward_module)
+compiled_model_fake = torch.compile(forward_module.forward)
 compile_end_event.record()
+
 
 torch.cuda.synchronize()
 compile_time = compile_start_event.elapsed_time(compile_end_event)
 logger.info(f"Compilation time of a forward call: {compile_time} ms")
+compiled_model = torch.compile(forward_module)
 
 # Measure compiled forward call time
 compiled_start_event = torch.cuda.Event(enable_timing=True)
